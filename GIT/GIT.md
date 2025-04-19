@@ -40,3 +40,33 @@ git merge development
 git commit
 # Push
 git push origin prod
+```
+
+## ✅ Best Practices for Committing
+
+1. **Commit Often, But Not Too Often**  
+   - Avoid committing every minor change (e.g., fixing a typo). Instead, group related changes logically into a single commit.
+
+2. **Write Clear Commit Messages**  
+   - Use the format described in this guide: `<type>(optional scope): <subject-description>`.  
+   - For example: `feat(api): Add support to create coupons`.
+
+3. **Test Before Committing**  
+   - Ensure your changes work as expected before committing to avoid introducing bugs into the codebase.
+## ✅ GIT commit message writing
+
+## Commit style
+
+| Commit Type | Description                                 |
+| ----------- | ------------------------------------------- |
+| feat        | Introduce a new feature to the codebase     |
+| fix         | Fix a bug in the codebase                   |
+| docs        | Create/update documentation                 |
+| style       | Feature and updates related to styling      |
+| refactor    | Refactor a specific section of the codebase |
+| test        | Add or update code related to testing       |
+| chore       | Regular code maintenance                    |
+### Example
+- Use the following format for commit messages: `<type>(optional scope): <subject-description>`.
+- For example: `feat(api): Add support to create coupons`.
+- This format helps to provide a clear and concise description of the changes made in each commit.
