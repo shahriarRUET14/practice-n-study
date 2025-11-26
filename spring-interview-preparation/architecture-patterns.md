@@ -545,3 +545,74 @@ Hybrid approach - JWT for essential info, Redis key for full context when needed
 
 ---
 
+## Microservices vs Monolithic: Comparison
+
+### Quick Overview
+
+| Aspect | Monolithic | Microservices |
+|--------|-----------|---------------|
+| **Structure** | Single deployable unit | Multiple independent services |
+| **Codebase** | Single codebase | Multiple codebases |
+| **Database** | Shared database | Database per service |
+| **Technology** | Single stack | Multiple stacks allowed |
+| **Communication** | In-process calls | Network calls (HTTP/gRPC) |
+| **Scaling** | Scale entire app | Scale individual services |
+| **Deployment** | Single deployment | Independent deployments |
+
+### Comprehensive Comparison
+
+| Aspect | Monolithic | Microservices |
+|--------|-----------|---------------|
+| **Development** | Fast (initial), simple | Slower (setup), complex |
+| **Debugging** | Simple (local) | Complex (distributed) |
+| **Testing** | Unit + integration | + Contract + E2E tests |
+| **Performance** | Fast (no network) | Slower (network latency) |
+| **Scalability** | Scale all or nothing | Scale per service |
+| **Cost** | Lower (fewer resources) | Higher (more infrastructure) |
+| **Team Size** | Small teams (1-5) | Large teams (10+) |
+| **Time to Market** | Faster (initial) | Slower (initial setup) |
+| **Fault Isolation** | Failure affects all | Isolated to service |
+| **Transaction** | ACID transactions | SAGA pattern |
+| **Consistency** | Strong | Eventual |
+| **Monitoring** | Single logs | Distributed tracing |
+| **Service Discovery** | Not needed | Required |
+
+### Pros and Cons
+
+**Monolithic:**
+- ✅ Simple, fast initial dev, better performance, lower cost, ACID transactions
+- ❌ Scaling limitations, tech lock-in, single point of failure, slower as grows
+
+**Microservices:**
+- ✅ Independent scaling, fault isolation, tech diversity, independent deployment
+- ❌ Complexity, network latency, distributed transactions, higher cost
+
+### When to Use
+
+**Monolithic:** Small team, simple app, fast time to market, limited budget, strong consistency needed
+
+**Microservices:** Large team, complex app, different scaling needs, tech diversity, independent deployment
+
+### Interview Answer
+
+**Q: Microservices vs Monolithic - when to choose which?**
+
+**Answer:**
+"**Choose Microservices when:**
+- Large team (10+ developers)
+- Different scaling needs per component
+- Technology diversity required
+- Independent deployment needed
+- High availability critical
+
+**Choose Monolithic when:**
+- Small team (1-5 developers)
+- Simple application
+- Fast time to market
+- Limited budget
+- Strong consistency required
+
+**Best Practice:** Start with monolithic, migrate to microservices when team grows or complexity increases."
+
+---
+
