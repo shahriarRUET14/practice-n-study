@@ -15,6 +15,418 @@
 @Transactional(rollbackFor = Exception.class)
 ```
 
+### What Happens Inside @Transactional with JPA and PostgreSQL
+
+**Complete Transaction Lifecycle:**
+
+```
+[1] Method Invocation
+    ↓
+[2] Spring AOP Proxy Intercepts
+    ↓
+[3] Transaction Manager Checks
+    ↓
+[4] Get/Create Transaction
+    ↓
+[5] Get Connection from Connection Pool
+    ↓
+[6] Set Transaction Isolation Level
+    ↓
+[7] Begin Transaction (BEGIN)
+    ↓
+[8] Execute Business Logic
+    │   ├─ EntityManager Operations
+    │   ├─ Hibernate Session Operations
+    │   └─ SQL Statements (Prepared Statements)
+    ↓
+[9] Check for Exceptions
+    ├─ No Exception → Commit Transaction (COMMIT)
+    └─ Exception → Rollback Transaction (ROLLBACK)
+    ↓
+[10] Release Connection to Pool
+    ↓
+[11] Return Result / Throw Exception
+```
+
+**Detailed Step-by-Step Flow:**
+
+**Step 1: Method Invocation**
+```java
+@Transactional
+public void transferMoney(Account from, Account to, BigDecimal amount) {
+    from.debit(amount);
+    to.credit(amount);
+    accountRepository.save(from);
+    accountRepository.save(to);
+}
+```
+
+**Step 2: Spring AOP Proxy Intercepts**
+```java
+// Spring creates proxy around method
+// Proxy checks for @Transactional annotation
+// If found → delegates to TransactionInterceptor
+```
+
+**Step 3: Transaction Manager Checks**
+```java
+// PlatformTransactionManager (JpaTransactionManager)
+// Checks:
+// - Is transaction already active? (propagation behavior)
+// - What isolation level?
+// - What timeout?
+// - Read-only?
+```
+
+**Step 4: Get/Create Transaction**
+```java
+// If no active transaction:
+//   - Create new transaction
+//   - Set transaction status = NEW
+// If active transaction exists:
+//   - Join existing (REQUIRED)
+//   - Create new (REQUIRES_NEW)
+//   - Suspend existing (NESTED)
+```
+
+**Step 5: Get Connection from Pool**
+```java
+// HikariCP / Connection Pool
+// - Get connection from pool
+// - If pool exhausted → wait or throw exception
+// - Connection is bound to current thread (ThreadLocal)
+```
+
+**Step 6: Set Transaction Isolation Level**
+```java
+// PostgreSQL Connection
+// SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+// Or use default from @Transactional(isolation = ...)
+```
+
+**Step 7: Begin Transaction (PostgreSQL)**
+```java
+// PostgreSQL receives:
+// BEGIN;
+// 
+// Connection is now in transaction mode
+// All subsequent SQL statements are part of this transaction
+```
+
+**Step 8: Execute Business Logic**
+
+**8.1 EntityManager Operations:**
+```java
+// JPA EntityManager (backed by Hibernate Session)
+// - Persist entities
+// - Track entity state changes
+// - Maintain first-level cache (Persistence Context)
+```
+
+**8.2 Hibernate Session Operations:**
+```java
+// Hibernate Session
+// - Dirty checking (compare entity state)
+// - Generate SQL statements
+// - Maintain entity snapshots
+```
+
+**8.3 SQL Statements (Prepared Statements):**
+```java
+// PostgreSQL receives SQL:
+// 
+// UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+// UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+// 
+// Statements are prepared and executed
+// Results are buffered (not committed yet)
+```
+
+**Step 9: Check for Exceptions**
+
+**9.1 No Exception Path (Success):**
+```java
+// Transaction Manager:
+// - Flush EntityManager (execute pending SQL)
+// - Commit transaction
+// 
+// PostgreSQL:
+// COMMIT;
+// 
+// - All changes are persisted
+// - Transaction log written
+// - Locks released
+```
+
+**9.2 Exception Path (Failure):**
+```java
+// Transaction Manager:
+// - Mark transaction for rollback
+// - Rollback transaction
+// 
+// PostgreSQL:
+// ROLLBACK;
+// 
+// - All changes are discarded
+// - Locks released
+// - Database returns to previous state
+```
+
+**Step 10: Release Connection to Pool**
+```java
+// Connection returned to HikariCP pool
+// ThreadLocal cleared
+// Connection available for next request
+```
+
+**Step 11: Return Result / Throw Exception**
+```java
+// If success: Return method result
+// If failure: Throw exception (wrapped if needed)
+```
+
+### Complete Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [1] Method Call: transferMoney(from, to, amount)            │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [2] Spring AOP Proxy Intercepts                             │
+│     - Checks @Transactional annotation                      │
+│     - Delegates to TransactionInterceptor                   │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [3] Transaction Manager (JpaTransactionManager)              │
+│     - Check propagation behavior                             │
+│     - Check isolation level                                │
+│     - Check timeout                                         │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [4] Get/Create Transaction                                   │
+│     - Create new transaction (if REQUIRED)                   │
+│     - Set transaction status = NEW                          │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [5] Get Connection from Pool (HikariCP)                      │
+│     - Get connection from pool                              │
+│     - Bind to ThreadLocal                                   │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [6] Set Isolation Level                                     │
+│     PostgreSQL: SET TRANSACTION ISOLATION LEVEL ...          │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [7] Begin Transaction                                        │
+│     PostgreSQL: BEGIN;                                       │
+│     - Connection in transaction mode                        │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [8] Execute Business Logic                                  │
+│     │                                                       │
+│     ├─ [8.1] EntityManager Operations                      │
+│     │   - Persist entities                                 │
+│     │   - Track changes                                    │
+│     │                                                       │
+│     ├─ [8.2] Hibernate Session                             │
+│     │   - Dirty checking                                   │
+│     │   - Generate SQL                                     │
+│     │                                                       │
+│     └─ [8.3] PostgreSQL SQL Execution                      │
+│         - UPDATE accounts SET balance = ... WHERE id = 1;  │
+│         - UPDATE accounts SET balance = ... WHERE id = 2;  │
+│         - Changes buffered (not committed)                │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [9] Check for Exceptions                                     │
+│     │                                                       │
+│     ├─ [9.1] No Exception → COMMIT                         │
+│     │   - Flush EntityManager                              │
+│     │   - PostgreSQL: COMMIT;                              │
+│     │   - Changes persisted                                │
+│     │                                                       │
+│     └─ [9.2] Exception → ROLLBACK                          │
+│         - Mark for rollback                                │
+│         - PostgreSQL: ROLLBACK;                             │
+│         - Changes discarded                                │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [10] Release Connection                                      │
+│      - Return to HikariCP pool                              │
+│      - Clear ThreadLocal                                    │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ [11] Return Result / Throw Exception                        │
+│      - Success: Return result                              │
+│      - Failure: Throw exception                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Code Example with Detailed Flow
+
+```java
+@Service
+public class AccountService {
+    
+    @Autowired
+    private AccountRepository accountRepository;
+    
+    @Transactional(
+        isolation = Isolation.READ_COMMITTED,
+        propagation = Propagation.REQUIRED,
+        timeout = 30,
+        rollbackFor = Exception.class
+    )
+    public void transferMoney(Long fromId, Long toId, BigDecimal amount) {
+        // Step 8: Business Logic Execution
+        
+        // 8.1: EntityManager finds entities
+        Account from = accountRepository.findById(fromId)
+            .orElseThrow();
+        Account to = accountRepository.findById(toId)
+            .orElseThrow();
+        
+        // 8.2: Modify entity state (tracked by Hibernate)
+        from.debit(amount);  // from.balance -= amount
+        to.credit(amount);    // to.balance += amount
+        
+        // 8.3: Save changes (Hibernate generates SQL)
+        accountRepository.save(from);
+        accountRepository.save(to);
+        
+        // Hibernate Session:
+        // - Detects dirty entities (balance changed)
+        // - Generates UPDATE SQL statements
+        // - Queues SQL for execution
+        
+        // Step 9: Method completes successfully
+        // - No exception thrown
+        // - Transaction will commit
+    }
+}
+```
+
+**What Happens at Each Level:**
+
+**Spring Level:**
+```java
+// TransactionInterceptor
+try {
+    // Begin transaction
+    TransactionStatus status = transactionManager.getTransaction(definition);
+    
+    // Execute method
+    Object result = method.invoke(target, args);
+    
+    // Commit transaction
+    transactionManager.commit(status);
+    return result;
+} catch (Exception e) {
+    // Rollback transaction
+    transactionManager.rollback(status);
+    throw e;
+}
+```
+
+**JPA/Hibernate Level:**
+```java
+// EntityManager / Session
+// 1. Track entity state changes
+// 2. Maintain first-level cache
+// 3. Generate SQL on flush
+// 4. Execute SQL via JDBC
+```
+
+**PostgreSQL Level:**
+```sql
+-- Step 7: Begin
+BEGIN;
+
+-- Step 8: Execute SQL (buffered)
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+
+-- Step 9.1: Commit (if success)
+COMMIT;
+
+-- OR Step 9.2: Rollback (if exception)
+ROLLBACK;
+```
+
+### Key Points
+
+**1. Transaction Isolation:**
+- **READ_COMMITTED**: See only committed data
+- **REPEATABLE_READ**: Consistent reads within transaction
+- **SERIALIZABLE**: Highest isolation, prevents phantom reads
+
+**2. Connection Management:**
+- One connection per transaction (ThreadLocal)
+- Connection reused from pool (HikariCP)
+- Connection released after commit/rollback
+
+**3. Entity State Management:**
+- Hibernate tracks entity changes (dirty checking)
+- Changes flushed to database on commit
+- First-level cache (Persistence Context) cleared on commit
+
+**4. Exception Handling:**
+- Checked exceptions: Don't rollback by default
+- Unchecked exceptions: Rollback by default
+- Use `rollbackFor` to customize
+
+**5. Propagation Behavior:**
+- **REQUIRED**: Join existing or create new
+- **REQUIRES_NEW**: Always create new transaction
+- **NESTED**: Create savepoint within existing
+
+### Interview Answer: Transaction Flow
+
+**Q: What happens when you call a @Transactional method?**
+
+**Answer:**
+"When a @Transactional method is called, Spring follows this flow:
+
+1. **AOP Proxy Intercepts**: Spring AOP proxy intercepts the method call
+2. **Transaction Manager**: Checks transaction configuration (propagation, isolation, timeout)
+3. **Get Connection**: Retrieves database connection from pool (HikariCP)
+4. **Begin Transaction**: PostgreSQL receives `BEGIN;` statement
+5. **Execute Business Logic**: 
+   - EntityManager tracks entity changes
+   - Hibernate generates SQL statements
+   - PostgreSQL executes SQL (buffered, not committed)
+6. **Check Result**:
+   - **Success**: Flush changes, send `COMMIT;` to PostgreSQL
+   - **Failure**: Send `ROLLBACK;` to PostgreSQL
+7. **Release Connection**: Return connection to pool
+8. **Return Result**: Return method result or throw exception
+
+**Key Points:**
+- Connection is bound to thread (ThreadLocal)
+- All SQL statements are part of one transaction
+- Changes are visible only after COMMIT
+- Rollback discards all changes in the transaction"
+
 ### Distributed Transactions: SAGA Pattern
 
 **Problem:** ACID transactions don't work across microservices (different databases)
