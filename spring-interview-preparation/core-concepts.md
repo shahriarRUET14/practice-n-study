@@ -62,3 +62,18 @@ public class AppConfig {
 
 ---
 
+## Spring Boot vs Spring Framework
+
+### Quick Comparison
+
+| Aspect | Spring Framework | Spring Boot |
+|--------|------------------|-------------|
+| **Purpose** | Core framework (DI, AOP, MVC) | Opinionated framework on top of Spring |
+| **Configuration** | XML or Java config required | Auto-configuration (convention over configuration) |
+| **Dependencies** | Manual dependency management | Starter dependencies (pre-configured) |
+| **Embedded Server** | Not included | Tomcat/Jetty included |
+| **Setup Time** | More configuration needed | Minimal configuration |
+| **Production Ready** | Manual setup required | Built-in features (actuator, metrics) |
+| **Deployment** | WAR file to external server | JAR file (standalone) |
+| **Learning Curve** | Steeper | Easier |
+
